@@ -148,7 +148,7 @@ class BigQueryTable:
         return bigquery.TableReference.from_string(str(self))
 
     def as_dataset_ref(self) -> bigquery.DatasetReference:
-        """Returns a DatasetReference for this table."""
+        """Returns a DatasetReference for this dataset."""
         return bigquery.DatasetReference(self.project, self.dataset)
 
     def as_table(self, apply_transforms: bool = False, **kwargs) -> bigquery.Table:
@@ -1154,3 +1154,17 @@ def transform_column_name(
     if replace_period_with_underscore:
         name = name.replace(".", "_")
     return name
+
+
+def convert_decimals_to_float(obj: Any) -> Any:
+    """Recursively convert Decimal objects to floats for JSON serialization."""
+    import decimal
+    
+    if isinstance(obj, decimal.Decimal):
+        return float(obj)
+    elif isinstance(obj, dict):
+        return {key: convert_decimals_to_float(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_decimals_to_float(item) for item in obj]
+    else:
+        return obj

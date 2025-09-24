@@ -35,6 +35,7 @@ from target_bigquery.core import (
     ParType,
     bigquery_client_factory,
     gcs_client_factory,
+    convert_decimals_to_float,
 )
 
 if TYPE_CHECKING:
@@ -167,7 +168,9 @@ class BigQueryGcsStagingSink(BaseBigQuerySink):
         }
 
     def process_record(self, record: Dict[str, Any], context: Dict[str, Any]) -> None:
-        self.buffer.write(orjson.dumps(record, option=orjson.OPT_APPEND_NEWLINE))
+        # Convert Decimal objects to floats before JSON serialization
+        serializable_record = convert_decimals_to_float(record)
+        self.buffer.write(orjson.dumps(serializable_record, option=orjson.OPT_APPEND_NEWLINE))
 
     def process_batch(self, context: Dict[str, Any]) -> None:
         self.buffer.close()
