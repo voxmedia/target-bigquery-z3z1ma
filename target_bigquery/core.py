@@ -451,6 +451,7 @@ class BaseBigQuerySink(BatchSink):
         self, record: Dict[str, Any], context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Preprocess a record before writing it to the sink."""
+        # Extract metadata fields
         metadata = {
             k: record.pop(k, None)
             for k in (
@@ -462,6 +463,20 @@ class BaseBigQuerySink(BatchSink):
                 "_sdc_table_version",
             )
         }
+        
+        # For FIXED ingestion strategy, preserve key properties at top level
+        # to avoid Singer SDK validation errors
+        if self.ingestion_strategy == IngestionStrategy.FIXED and self.key_properties:
+            # Extract key properties from record before wrapping in data
+            key_values = {}
+            for key_prop in self.key_properties:
+                if key_prop in record:
+                    key_values[key_prop] = record[key_prop]
+            
+            # Return with key properties at top level and rest in data
+            return {"data": record, **metadata, **key_values}
+        
+        # Default behavior for non-fixed strategies
         return {"data": record, **metadata}
 
     @retry(
