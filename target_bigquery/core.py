@@ -1062,8 +1062,12 @@ class Compressor:
         # close the buffer, ignore error if we have an incremented rc due to memoryview
         # the gc will take care of the rest when the worker dereferences the buffer
         try:
-            self.buffer.close()
-        except BufferError:
+            # Access _buffer directly instead of using the buffer property to avoid cast() during shutdown
+            if hasattr(self, '_buffer') and self._buffer is not None:
+                self._buffer.close()
+        except (BufferError, ImportError, AttributeError):
+            # Ignore errors during shutdown - ImportError for cast() issues, 
+            # AttributeError for missing attributes, BufferError for memoryview issues
             pass
         if self._compressor is not None and self._compressor.poll() is None:
             self._compressor.kill()
