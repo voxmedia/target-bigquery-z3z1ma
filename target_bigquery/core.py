@@ -1030,8 +1030,14 @@ class Compressor:
         self._gzip.close()
         if self._compressor is not None:
             self._compressor.wait()
-        self.buffer.flush()
-        self.buffer.seek(0)
+        # Use _buffer directly to avoid cast() during shutdown
+        if self._buffer is not None:
+            try:
+                self._buffer.flush()
+                self._buffer.seek(0)
+            except (AttributeError, ValueError):
+                # Ignore errors if buffer is already closed or invalid
+                pass
         self._closed = True
 
     def getvalue(self) -> bytes:
@@ -1065,7 +1071,7 @@ class Compressor:
             # Use self._buffer directly to avoid cast() during shutdown
             if self._buffer is not None:
                 self._buffer.close()
-        except (BufferError, AttributeError):
+        except (BufferError, AttributeError, ValueError):
             pass
         if self._compressor is not None and self._compressor.poll() is None:
             self._compressor.kill()
