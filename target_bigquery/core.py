@@ -446,6 +446,9 @@ class BaseBigQuerySink(BatchSink):
 
     def _validate_and_parse(self, record: dict) -> dict:
         return record
+    
+    def _singer_validate_message(self, record: dict) -> None:
+        pass
 
     def preprocess_record(
         self, record: Dict[str, Any], context: Dict[str, Any]

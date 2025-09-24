@@ -11,6 +11,8 @@
 """BigQuery Batch Job Sink."""
 
 import os
+import json
+from decimal import Decimal
 from io import BytesIO
 from mmap import mmap
 from multiprocessing import Process
@@ -92,6 +94,11 @@ class BatchJobThreadWorker(BatchJobWorker, _Thread):
 class BatchJobProcessWorker(BatchJobWorker, Process):
     pass
 
+class JSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return json.JSONEncoder.default(self, obj)
 
 class BigQueryBatchJobSink(BaseBigQuerySink):
     MAX_WORKERS = (os.cpu_count() or 1) * 2
@@ -118,7 +125,7 @@ class BigQueryBatchJobSink(BaseBigQuerySink):
         return cast(Type[BatchJobThreadWorker], Worker)
 
     def process_record(self, record: Dict[str, Any], context: Dict[str, Any]) -> None:
-        self.buffer.write(orjson.dumps(record, option=orjson.OPT_APPEND_NEWLINE))
+        self.buffer.write(orjson.dumps(record, option=orjson.OPT_APPEND_NEWLINE, default=JSONEncoder().default))
 
     def process_batch(self, context: Dict[str, Any]) -> None:
         self.buffer.close()
