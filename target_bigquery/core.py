@@ -148,7 +148,7 @@ class BigQueryTable:
         return bigquery.TableReference.from_string(str(self))
 
     def as_dataset_ref(self) -> bigquery.DatasetReference:
-        """Returns a DatasetReference for this dataset."""
+        """Returns a DatasetReference for this table."""
         return bigquery.DatasetReference(self.project, self.dataset)
 
     def as_table(self, apply_transforms: bool = False, **kwargs) -> bigquery.Table:
@@ -451,7 +451,6 @@ class BaseBigQuerySink(BatchSink):
         self, record: Dict[str, Any], context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Preprocess a record before writing it to the sink."""
-        # Extract metadata fields
         metadata = {
             k: record.pop(k, None)
             for k in (
@@ -463,20 +462,6 @@ class BaseBigQuerySink(BatchSink):
                 "_sdc_table_version",
             )
         }
-        
-        # For FIXED ingestion strategy, preserve key properties at top level
-        # to avoid Singer SDK validation errors
-        if self.ingestion_strategy == IngestionStrategy.FIXED and self.key_properties:
-            # Extract key properties from record before wrapping in data
-            key_values = {}
-            for key_prop in self.key_properties:
-                if key_prop in record:
-                    key_values[key_prop] = record[key_prop]
-            
-            # Return with key properties at top level and rest in data
-            return {"data": record, **metadata, **key_values}
-        
-        # Default behavior for non-fixed strategies
         return {"data": record, **metadata}
 
     @retry(
@@ -1045,14 +1030,8 @@ class Compressor:
         self._gzip.close()
         if self._compressor is not None:
             self._compressor.wait()
-        # Use _buffer directly to avoid cast() during shutdown
-        if self._buffer is not None:
-            try:
-                self._buffer.flush()
-                self._buffer.seek(0)
-            except (AttributeError, ValueError):
-                # Ignore errors if buffer is already closed or invalid
-                pass
+        self.buffer.flush()
+        self.buffer.seek(0)
         self._closed = True
 
     def getvalue(self) -> bytes:
@@ -1083,10 +1062,8 @@ class Compressor:
         # close the buffer, ignore error if we have an incremented rc due to memoryview
         # the gc will take care of the rest when the worker dereferences the buffer
         try:
-            # Use self._buffer directly to avoid cast() during shutdown
-            if self._buffer is not None:
-                self._buffer.close()
-        except (BufferError, AttributeError, ValueError):
+            self.buffer.close()
+        except BufferError:
             pass
         if self._compressor is not None and self._compressor.poll() is None:
             self._compressor.kill()
@@ -1154,17 +1131,3 @@ def transform_column_name(
     if replace_period_with_underscore:
         name = name.replace(".", "_")
     return name
-
-
-def convert_decimals_to_float(obj: Any) -> Any:
-    """Recursively convert Decimal objects to floats for JSON serialization."""
-    import decimal
-    
-    if isinstance(obj, decimal.Decimal):
-        return float(obj)
-    elif isinstance(obj, dict):
-        return {key: convert_decimals_to_float(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [convert_decimals_to_float(item) for item in obj]
-    else:
-        return obj
